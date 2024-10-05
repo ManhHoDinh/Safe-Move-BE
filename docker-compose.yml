@@ -50,11 +50,12 @@ services:
       volumes:
         - ./auth-service/:/app/
       ports:
-        - 8002:8000
+        - 8003:8000
       environment:
         - DATABASE_URI=postgresql://auth_db_username:auth_db_password@auth_db/auth_db_dev
       depends_on:
         - auth_db
+  
   auth_db:
       image: postgres:12.1-alpine
       volumes:
@@ -63,7 +64,20 @@ services:
         - POSTGRES_USER=auth_db_username
         - POSTGRES_PASSWORD=auth_db_password
         - POSTGRES_DB=auth_db_dev
-    
+  
+  camera_service:
+      build: ./camera-service
+      command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+      volumes:
+        - ./camera-service/:/app/
+      ports:
+        - 8004:8000
+      environment:
+        - DATABASE_URI=postgresql://movie_db_username:movie_db_password@movie_db/movie_db_dev
+        - CAST_SERVICE_HOST_URL=http://cast_service:8000/api/v1/casts/
+      depends_on:
+        - movie_db
+
   nginx:
     image: nginx:latest
     ports:
@@ -73,7 +87,9 @@ services:
     depends_on:
       - cast_service
       - movie_service
+      - camera_service
 
 volumes:
   postgres_data_movie:
   postgres_data_cast:
+  postgres_data_auth:
