@@ -23,6 +23,7 @@ flood_information = Table(
     Column('status', SQLAlchemyEnum(
         EStatus, name="status_enum"), nullable=False),
     Column('floodLevel', Integer, nullable=False),
+    Column('url', String, nullable=False),
 )
 
 database = Database(DATABASE_URI)
