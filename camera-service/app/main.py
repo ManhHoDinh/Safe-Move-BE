@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 metadata.create_all(engine)
 
 app = FastAPI(openapi_url="/api/v1/cameras/openapi.json",
-              docs_url="/api/v1/cameras/docs")
+              docs_url="/docs")
 
 app.add_middleware(
     CORSMiddleware,

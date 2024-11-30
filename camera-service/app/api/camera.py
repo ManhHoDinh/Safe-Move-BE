@@ -1,6 +1,6 @@
 from typing import List, Dict, Optional
 from fastapi import APIRouter, HTTPException, Depends
-from app.api.models import Camera
+from app.api.models import Camera, FollowRequest, FollowCamera
 from app.api import db_manager
 from app.api.db_manager import DBManager
 from sqlalchemy.orm import Session
@@ -50,3 +50,24 @@ async def modify_multiple_camera_status(
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@cameras.post("/cameras/follow")
+async def follow_camera(
+    requestInfo: FollowRequest,
+    db: Database = Depends(get_db)
+):
+    try:
+        new_follow = await db_manager.follow_camera_service(db, requestInfo)
+        return new_follow
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@cameras.delete("/cameras/follow/{_id}")
+async def unfollow_camera(_id: str, db=Depends(get_db)):
+    deleted = await db_manager.unfollow_camera_service(db, _id)
+    if not deleted:
+        raise HTTPException(
+            status_code=404, detail="Follow camera not found")
+    return {"message": "Follow camera deleted successfully"}

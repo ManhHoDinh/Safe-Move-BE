@@ -15,11 +15,11 @@ class Camera(BaseModel):
     camera_id: str = Field(..., alias="_id")
     id: str
     name: str
-    loc: Location  # Expect loc as a Location object
-    values: Dict[str, str]  # Dict to hold 'ip' or other dynamic keys
+    loc: Location
+    values: Dict[str, str]
     dist: str
     ptz: bool
-    angle: Optional[int] = None  # Optional to handle missing 'angle'
+    angle: Optional[int] = None
     liveviewUrl: str
     isEnabled: bool
     lastModified: datetime = datetime.utcnow()
@@ -32,3 +32,16 @@ class CameraStatusUpdate(BaseModel):
 class CameraUpdateRequest(BaseModel):
     camera_id: str
     is_enabled: bool
+
+
+class FollowCamera(BaseModel):
+    id: str
+    cameraId: str
+    userId: str
+    userEmail: str
+
+
+class FollowRequest(BaseModel):
+    cameraId: str
+    userId: str
+    userEmail: str

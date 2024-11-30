@@ -2,13 +2,15 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 import httpx
-from app.api.db import cameras, get_db
-from app.api.models import CAMERA_API_URL, Camera
+from app.api.db import cameras, get_db, follow_camera
+from app.api.models import CAMERA_API_URL, Camera, FollowRequest
 from databases import Database
 from pydantic import ValidationError
-from sqlalchemy import insert, or_, select, update
+from sqlalchemy import insert, or_, select, update, and_, delete
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from fastapi import HTTPException
+from uuid import uuid4
 
 camera_status = {}
 
@@ -108,3 +110,48 @@ async def get_camera_list(
 
     results = await db.fetch_all(query)
     return [Camera(**result) for result in results]
+
+
+async def follow_camera_service(db: Database, request: FollowRequest):
+    camera_query = await db.fetch_one(
+        select([cameras]).where(cameras.c._id == request.cameraId)
+    )
+    if camera_query is None:
+        raise HTTPException(status_code=404, detail="Camera does not exist")
+
+    follow_query = await db.fetch_one(
+        select([follow_camera]).where(
+            and_(
+                follow_camera.c.cameraId == request.cameraId,
+                follow_camera.c.userId == request.userId
+            )
+        )
+    )
+    if follow_query is not None:
+        raise HTTPException(
+            status_code=400, detail="User already following this camera"
+        )
+
+    follow_entry = {
+        '_id': str(uuid4()),
+        'cameraId': request.cameraId,
+        'userId': request.userId,
+        'userEmail': request.userEmail,
+    }
+    insert_query = insert(follow_camera).values(follow_entry)
+    await db.execute(insert_query)
+
+    return follow_entry
+
+
+async def unfollow_camera_service(db: Database, _id: str):
+    query = delete(follow_camera).where(follow_camera.c._id == _id)
+
+    result = await db.execute(query)
+
+    if result is None:
+        raise HTTPException(
+            status_code=404, detail="Follow camera  not found"
+        )
+
+    return {"message": "Follow camera deleted successfully"}
