@@ -4,10 +4,6 @@ from enum import Enum
 from pydantic import BaseModel, Field
 
 
-class Location(BaseModel):
-    type: str
-    coordinates: List[float]
-
 
 class EStatus(str, Enum):
     APPROVED = "Approved"
@@ -18,19 +14,24 @@ class EStatus(str, Enum):
 class FloodInformation(BaseModel):
     id: str = Field(default=None, alias="_id")
     userName: str
-    location: Location
+    latitude: float
+    longitude: float
     locationName: str
     date: datetime = datetime.utcnow()
     status: EStatus
     floodLevel: int
+    message: str
+    modelDetectFloodLevel: int
     userId: str
+    url: str
 
 
 class FloodInformationCreate(BaseModel):
     userName: str
-    location: Location
+    latitude: float
+    longitude: float
     locationName: str
+    message: str
     date: datetime = Field(default_factory=datetime.utcnow)
-    status: EStatus
     floodLevel: int
     userId: str

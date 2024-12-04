@@ -26,6 +26,15 @@ cameras = Table(
     Column('lastmodified', DateTime, default=datetime.utcnow())
 )
 
+follow_camera = Table(
+    'follow_camera',
+    metadata,
+    Column('_id', String, primary_key=True),
+    Column('cameraId', String),
+    Column('userId', String),
+    Column('userEmail', String),
+)
+
 database = Database(DATABASE_URI)
 
 

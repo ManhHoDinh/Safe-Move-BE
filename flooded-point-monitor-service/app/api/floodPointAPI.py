@@ -6,9 +6,18 @@ from .database import get_db
 import random
 from typing import List
 import requests
-
+from keras.models import load_model
+from keras.preprocessing import image
+import numpy as np
+from fastapi.responses import JSONResponse
+import tensorflow as tf
+from PIL import Image
+import io
+from loguru import logger
+import httpx
+from PIL import Image
 # URL của API
-EXTERNAL_API_URL = "https://api.notis.vn/v4/cameras/bybbox?lat1=11.160767&lng1=106.554166&lat2=9.45&lng2=128.99999"
+EXTERNAL_API_URL = "https://camera-service.onrender.com/api/v1/cameras/cameras?is_enabled=true"
 
 # Headers cho request
 HEADERS = {
@@ -24,6 +33,51 @@ HEADERS = {
     "referer": "http://localhost/",
     "accept-language": "en-US,en;q=0.9,vi-VN;q=0.8,vi;q=0.7",
 }
+# Load the trained model
+model = load_model("./app/api/fine_tuned_flood_detection_model.keras", custom_objects={'Functional': tf.keras.Model})
+
+# Define the expected input size for your model
+IMAGE_HEIGHT = 224
+IMAGE_WIDTH = 224
+# Function to preprocess an image for the model
+def preprocess_image(image: Image.Image) -> np.ndarray:
+    """Resize and normalize an image for model input."""
+    img = image.resize((IMAGE_HEIGHT, IMAGE_WIDTH))
+    img_array = np.array(img) / 255.0  # Normalize pixel values to [0, 1]
+    img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
+    return img_array
+
+async def predict(image: Image.Image):
+    """Make a prediction based on the preprocessed image."""
+    try:
+        if not isinstance(image, Image.Image):
+            raise ValueError("Input is not a valid image")
+        
+        img_array = preprocess_image(image)
+        pred = model.predict(img_array)
+        predicted_class = np.argmax(pred, axis=1)[0]
+        label = "Flooding" if predicted_class == 0 else "Normal"
+        print("Prediction: ", label)
+        return predicted_class
+    except Exception as e:
+        logger.error("Error during prediction: {}", e)
+        return 0  # Return 0 if there's an error
+
+async def get_image_and_detect(url):
+    print("URL: ", url)
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url)
+            if response.status_code == 200:
+                image_bytes = response.content
+                input_image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+                return input_image
+            else:
+                logger.error("Failed to fetch image, status code: {}", response.status_code)
+                return None
+    except Exception as e:
+        logger.error("Error in fetching or detecting image: {}", e)
+        return None
 
 async def update_flood_points():
     db = next(get_db())  # Lấy kết nối DB
@@ -31,11 +85,13 @@ async def update_flood_points():
     try:
         response = requests.get(EXTERNAL_API_URL)
         if response.status_code == 200:
-            flood_points = response.json()  # Giả định API trả về danh sách JSON
-            for point in flood_points:
-                latitude = point["loc"]["coordinates"][1]
-                longitude = point["loc"]["coordinates"][0]
-                name = point["name"]
+            cameras = response.json()  # Giả định API trả về danh sách JSON
+            i = 0
+            for camera in cameras:
+                i += 1
+                latitude = camera["loc"]["coordinates"][1]
+                longitude = camera["loc"]["coordinates"][0]
+                name = camera["name"]
                 existing_point = db.query(models.FloodPoint).filter(
                     models.FloodPoint.latitude == latitude,
                     models.FloodPoint.longitude == longitude
@@ -45,13 +101,15 @@ async def update_flood_points():
                 expiration_time = datetime.now() + timedelta(minutes=5)
                 
                 # Random flood_level từ 0 đến 5
-                flood_level = random.randint(0, 5)
-                
+                url = f"http://giaothong.hochiminhcity.gov.vn/render/ImageHandler.ashx?id={camera['_id']}"
+                input_image = await get_image_and_detect(url)
+                flood_level = int(await predict(input_image))
+                print(f"Camera {i}: {name} - Latitude: {latitude}, Longitude: {longitude}, Flood level: {flood_level}")
                 # Cập nhật nếu điểm đã tồn tại, thêm mới nếu không tồn tại
                 if existing_point:
                     existing_point.name = name
                     existing_point.expiration_time = expiration_time
-                    existing_point.flood_level = flood_level
+                    existing_point.flood_level = int(flood_level)
                 else:
                     new_point = models.FloodPoint(
                         name=name,
